@@ -44,7 +44,7 @@ def chunk_transcript(transcript, max_words=200):
     return chunks
 
 ytt_api = YouTubeTranscriptApi()
-transcript = ytt_api.fetch("xiUTqnI6xk8").to_raw_data()
+transcript = ytt_api.fetch("LPZh9BOjkQs").to_raw_data()
 
 chunks = chunk_transcript(transcript)
 
