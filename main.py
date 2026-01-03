@@ -1,6 +1,6 @@
 from langchain_ollama.llms import OllamaLLM
 from langchain_core.prompts import ChatPromptTemplate
-from embed import retriever
+from embed import build_retriever
 from langchain_core.output_parsers import StrOutputParser
 
 def format_context(docs):
@@ -55,6 +55,10 @@ Question: {question}
 """)
 
 rewrite_chain = rewrite_prompt | model | StrOutputParser()
+
+youtube_url = input("Paste YouTube video link: ").strip()
+retriever = build_retriever(youtube_url)
+print("Transcript embedded. Ask questions.")
 
 while True:
     print("\n\n--------------------------------")

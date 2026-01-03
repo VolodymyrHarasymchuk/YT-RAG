@@ -1,0 +1,17 @@
+# ---- Chroma / Vector Databases ----
+chroma_db/
+*.sqlite3
+*.db
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+
+# ---- Environment Variables ----
+.env
+
+# ---- Logs ----
+*.log

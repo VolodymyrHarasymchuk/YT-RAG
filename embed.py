@@ -1,7 +1,18 @@
+# embed.py
+import re
+import shutil
 from langchain_ollama import OllamaEmbeddings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from youtube_transcript_api import YouTubeTranscriptApi
+
+DB_LOCATION = "./chroma_db"
+
+def extract_video_id(url: str) -> str:
+    match = re.search(r"(?:v=|youtu\.be/)([^&?/]+)", url)
+    if not match:
+        raise ValueError("Invalid YouTube URL")
+    return match.group(1)
 
 def seconds_to_timestamp(seconds: float) -> str:
     seconds = int(seconds)
@@ -17,7 +28,6 @@ def seconds_to_timestamp(seconds: float) -> str:
 def chunk_transcript(transcript, max_words=200):
     chunks = []
     current_text = []
-
     start_time = transcript[0]["start"]
 
     for seg in transcript:
@@ -29,11 +39,9 @@ def chunk_transcript(transcript, max_words=200):
                 "start_seconds": start_time,
                 "start_timestamp": seconds_to_timestamp(start_time)
             })
-
             current_text = []
             start_time = seg["start"]
 
-    # handle leftover text
     if current_text:
         chunks.append({
             "text": " ".join(current_text),
@@ -43,34 +51,42 @@ def chunk_transcript(transcript, max_words=200):
 
     return chunks
 
-ytt_api = YouTubeTranscriptApi()
-transcript = ytt_api.fetch("LPZh9BOjkQs").to_raw_data()
+def build_retriever(youtube_url: str):
+    # clear previous DB
+    shutil.rmtree(DB_LOCATION, ignore_errors=True)
 
-chunks = chunk_transcript(transcript)
+    video_id = extract_video_id(youtube_url)
+    yt_api = YouTubeTranscriptApi()
+    transcript = yt_api.fetch(video_id).to_raw_data()
+    chunks = chunk_transcript(transcript)
 
-embeddings = OllamaEmbeddings(model="mxbai-embed-large")
-db_location = "./chroma_db"
+    embeddings = OllamaEmbeddings(model="mxbai-embed-large")
 
-documents = []
-ids = []
+    documents = []
+    ids = []
 
-for i, chunk in enumerate(chunks):
-    document = Document(
-        page_content=chunk["text"],
-        metadata={"timestamp": chunk["start_timestamp"]},
-        id=str(i)
+    for i, chunk in enumerate(chunks):
+        documents.append(
+            Document(
+                page_content=chunk["text"],
+                metadata={
+                    "timestamp": chunk["start_timestamp"],
+                    "video_id": video_id
+                },
+                id=str(i)
+            )
+        )
+        ids.append(str(i))
+
+    vectordb = Chroma(
+        collection_name="youtube_transcripts",
+        persist_directory=DB_LOCATION,
+        embedding_function=embeddings
     )
-    ids.append(str(i))
-    documents.append(document)
 
-vectordb = Chroma(
-    collection_name="youtube_transcripts",
-    persist_directory=db_location,
-    embedding_function=embeddings
-)
+    vectordb.add_documents(documents, ids=ids)
 
-vectordb.add_documents(documents, ids=ids)
-retriever = vectordb.as_retriever(
-    search_type="mmr",
-    search_kwargs={"k": 3}
-)
+    return vectordb.as_retriever(
+        search_type="mmr",
+        search_kwargs={"k": 3}
+    )
